@@ -1,0 +1,164 @@
+
+<canvas id="canvas">
+
+</canvas>
+
+<script>
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+
+const width = 900; const height = 900;
+
+class Image{
+
+    constructor(width, height){
+        this.width = width;
+        this.height = height;
+        this.data = new Uint8ClampedArray(width * height * 4);
+        for (let i = 0; i< this.data.length; i+=4) {
+            // this.data[i + 0] = i/100; // R value
+            // this.data[i + 1] = height+i/100; // G value
+            // this.data[i + 2] = 0; // B value
+            this.data[i + 3] = 255; // A value
+        }
+    }
+
+    set(x,y, value){
+        x = Math.floor(x) + this.width/2; y = Math.floor(y) + this.height/2;
+        this.data[(y*this.width + x)*4 + 0] = value[0];
+        this.data[(y*this.width + x)*4 + 1] = value[1];
+        this.data[(y*this.width + x)*4 + 2] = value[2];
+        this.data[(y*this.width + x)*4 + 3] = 255;
+    }
+
+    drawPoint(point, value){
+        this.set(point.x, point.y, value);
+    }
+
+}
+
+const image = new Image(width, height);
+console.log(image.data);
+
+
+// Screeen size
+const screenWidth = window.innerWidth;
+const screenHeight = window.innerHeight;
+
+// Set canvas width and height as screenWidth
+canvas.width = screenWidth-20;
+canvas.height = screenWidth-20;
+
+
+
+
+let imageData = new ImageData(image.data, width, height);
+imageData.data = image.data;
+imageData.colorSpace = 'rgb';
+
+console.log(imageData)
+
+
+class Point{
+    constructor(x,y,z){
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    rotateX(rad){
+        const cosa = Math.cos(rad);
+        const sina = Math.sin(rad);
+        const y = this.y * cosa - this.z * sina;
+        const z = this.y * sina + this.z * cosa;
+        this.y = y;
+        this.z = z;
+    }
+
+    rotateY(rad){
+        const cosa = Math.cos(rad);
+        const sina = Math.sin(rad);
+        const x = this.x * cosa - this.z * sina;
+        const z = this.x * sina + this.z * cosa;
+        this.z = z;
+        this.x = x;
+    }
+
+    rotateZ(rad){
+        const cosa = Math.cos(rad);
+        const sina = Math.sin(rad);
+        const x = this.x * cosa - this.y * sina;
+        const y = this.x * sina + this.y * cosa;
+        // return new Point(x, y, this.z);
+        this.x = x;
+        this.y = y;
+    }
+
+    dot(point){
+        return this.x * point.x + this.y * point.y + this.z * point.z;
+    }
+}
+
+function draw(image){
+    const imageData = new ImageData(image.data, width, height);
+    ctx.putImageData(imageData, 0,0)
+}
+
+const CIRCLE_RADIUS = 40*2;
+const HOLE_RADIUS = 30*3;
+const STEP = 0.01 * Math.PI;
+const FILL_RATIO = 100 * Math.PI;
+const CAMERA = new Point(0,1,0);
+
+function drawDonut(rotationX, rotationZ, fluctNumber){
+    const image = new Image(width, height);
+    let circle_radius = CIRCLE_RADIUS //+ fluctNumber*20;
+    let hole_radius = HOLE_RADIUS //+ fluctNumber*20;
+    const multiplier = 1//(1 + fluctNumber*0.5) + 0.1;
+    let fill_ratio = FILL_RATIO*10*(1/multiplier)
+    let step = STEP * multiplier;
+    let i = 0;
+    for (let i = 0; i < 2*Math.PI; i+=step/circle_radius){
+        const point = new Point(
+            Math.cos(i*fill_ratio)*circle_radius + (hole_radius + circle_radius),
+            Math.sin(i*fill_ratio)*circle_radius,
+            0,
+        )
+        point.rotateY(i);
+        point.rotateX(rotationX);
+        point.rotateZ(rotationZ);
+        point.prev 
+
+        // const normal = new Point(
+        //     Math.sin(i*fill_ratio),
+        //     Math.cos(i*fill_ratio),
+        //     0,
+        // )
+        // normal.rotateY(i);
+        // normal.rotateX(rotationZ);
+        // normal.rotateZ(rotationX);
+        // if (CAMERA.dot(normal) > 0){
+        image.drawPoint(point, [255, 255, 255]);
+        // }
+        // image.drawPoint(point, [255, 255, 255]);
+    }
+    draw(image);
+}
+
+
+let rotationX = 0;
+let rotationZ = 0;
+let fluctNumber = 0;
+// Animation
+function loop() {
+    drawDonut(rotationX, rotationZ, Math.sin(fluctNumber));
+    rotationX += 0.005;
+    rotationZ += 0.01;
+    fluctNumber += 0.005;
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
