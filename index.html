@@ -31,7 +31,8 @@ class Screen{
             // this.data[i + 2] = 0; // B value
             this.data[i + 3] = 255; // A value
         }
-        this.light = new Vector(0.5,0.5,-1);
+        this.light = new Vector(0.5,0.5,-1).normalize();
+        // this.light = new Vector(0,0,-1).normalize();
         this.camera = {
             direction: new Vector(0,0,1),
         }
@@ -43,6 +44,16 @@ class Screen{
         this.data[(y*this.width + x)*4 + 1] = value[1];
         this.data[(y*this.width + x)*4 + 2] = value[2];
         this.data[(y*this.width + x)*4 + 3] = 255;
+    }
+
+    get(x,y) {
+        x = Math.floor(x) + this.width/2; y = Math.floor(y) + this.height/2;
+        return [
+            this.data[(y*this.width + x)*4 + 0],
+            this.data[(y*this.width + x)*4 + 1],
+            this.data[(y*this.width + x)*4 + 2],
+            this.data[(y*this.width + x)*4 + 3],
+        ]
     }
 
     point(point, value){
@@ -69,45 +80,60 @@ class Screen{
     }
 
 
-    triangle(triangle, value){
+    triangle(triangle, color){
+        // const {c1,c2,c3} = color;
+
         // Triangle rasterization
         const normal = triangle.normal();
         // Check if triangle is backfacing
         if ( normal.dot(this.camera.direction) > 0) return;
-        const intensity = Math.max(0,normal.dot(this.light))
-
+        // console.log(normal)
+        const intensity = Math.max(0,normal.dot(this.light)) * 255;
+        // console.log(intensity);
 
         // // Draw lines
-        this.line(triangle.p1, triangle.p2, [intensity, intensity, intensity], [intensity, intensity, intensity]);
-        this.line(triangle.p2, triangle.p3, [intensity, intensity, intensity], [intensity, intensity, intensity]);
-        this.line(triangle.p3, triangle.p1, [intensity, intensity, intensity], [intensity, intensity, intensity]);
+        const p1 = triangle.p1;
+        const p2 = triangle.p2;
+        const p3 = triangle.p3;
 
-        // console.log(line1, line2, line3);
-        // Scan lines
-        // const p1 = triangle.p1;
-        // const p2 = triangle.p2;
-        // const p3 = triangle.p3;
+        const minx = Math.floor(Math.min(p1.x, p2.x, p3.x));
+        const miny = Math.floor(Math.min(p1.y, p2.y, p3.y));
 
-        // const minx = Math.floor(Math.min(p1.x, p2.x, p3.x));
-        // const miny = Math.floor(Math.min(p1.y, p2.y, p3.y));
+        const maxx = Math.ceil(Math.max(p1.x, p2.x, p3.x));
+        const maxy = Math.ceil(Math.max(p1.y, p2.y, p3.y));
 
-        // const maxx = Math.ceil(Math.max(p1.x, p2.x, p3.x));
-        // const maxy = Math.ceil(Math.max(p1.y, p2.y, p3.y));
-
-        // for ( let x = minx; x < maxx; x++){
-        //     for (let y = miny; y < maxy; y++){
-        //         const b = triangle.barycentric(x,y)
-        //         if (b.x > 0 && b.y > 0 && b.z > 0){
-        //             this.set(x,y, [255,255,255]);
-        //         }
-        //     }
-        // }
+        for ( let x = minx; x < maxx; x++){
+            for (let y = miny; y < maxy; y++){
+                const {w, v, u} = triangle.barycentric(x,y);
+                if ( w >= -0.01 && v >= -0.01 && u >= -0.01 && w <= 1.01 && v <= 1.01 && u <= 1.01){
+                    this.set(x,y, [intensity, intensity, intensity]);
+                }
+            }
+        }
 
     }
 
 
-    draw(){
-        const imageData = new ImageData(this.data, this.width, this.height);
+    draw(upsample = 1){
+        let array = this.data;
+        if (upsample > 1){
+            // Upsample
+            array = new Uint8ClampedArray(this.width * this.height * 4 * upsample * upsample);
+            for (let i = 0; i < this.width; i++){
+                for (let j = 0; j < this.height; j++){
+                    for (let x = 0; x < upsample; x++){
+                        for (let y = 0; y < upsample; y++){
+                            array[((j*upsample+y)*this.width*upsample + (i*upsample+x))*4 + 3] = 255;
+                            array[((j*upsample+y)*this.width*upsample + (i*upsample+x))*4 + 0] = this.data[(j*this.width + i)*4 + 0];
+                            array[((j*upsample+y)*this.width*upsample + (i*upsample+x))*4 + 1] = this.data[(j*this.width + i)*4 + 1];
+                            array[((j*upsample+y)*this.width*upsample + (i*upsample+x))*4 + 2] = this.data[(j*this.width + i)*4 + 2];
+                        }
+                    }
+                }
+            }
+        }
+        
+        const imageData = new ImageData(array, this.width*upsample, this.height*upsample);
         ctx.putImageData(imageData, 0,0)
     }
 
@@ -118,6 +144,11 @@ class Vector{
         this.x = x;
         this.y = y;
         this.z = z;
+    }
+
+    normalize(){
+        const length = Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z);
+        return new Vector(this.x/length, this.y/length, this.z/length);
     }
 
     rotateX(rad){
@@ -193,38 +224,46 @@ class Triangle{
     normal(){
         const v1 = this.p2.sub(this.p1);
         const v2 = this.p3.sub(this.p1);
-        return v1.cross(v2);
+        return v1.cross(v2).normalize();
     }
 
+
+    // Get the w1 and w2 values for a point
     barycentric(x,y) {
-        const v0 = this.p2.sub(this.p1);
-        const v1 = this.p3.sub(this.p1);
-        const v2 = new Vector(this.p1.x - x, this.p1.y - y, 0);
+        const p1 = this.p1.copy(); p1.z = 0;
+        const p2 = this.p2.copy(); p2.z = 0;
+        const p3 = this.p3.copy(); p3.z = 0;
+
+        const v0 = p1.sub(p2);
+        const v1 = p1.sub(p3);
+        const v2 = new Vector(p1.x - x, p1.y - y, 0);
         const d00 = v0.dot(v0);
         const d01 = v0.dot(v1);
         const d11 = v1.dot(v1);
-
         const d20 = v2.dot(v0);
         const d21 = v2.dot(v1);
         const denom = d00 * d11 - d01 * d01;
-        const v = (d11 * d20 - d01 * d21) / denom;
-        const w = (d00 * d21 - d01 * d20) / denom;
-        const u = 1.0 - v - w;
-        return new Vector(u,v,w);
+        const w = (d11 * d20 - d01 * d21) / denom;
+        const v = (d00 * d21 - d01 * d20) / denom;
+        const u = 1 - w - v;
+        return {w, v, u};
     }
 
 }
 
 
-const CIRCLE_RADIUS = 40*2;
-const HOLE_RADIUS = 30*3;
-const N_STEPS_CIRCLE = 50;
-const N_STEPS_DONUT = 50;
+const CIRCLE_RADIUS = 80;
+const HOLE_RADIUS = 90;
+const N_STEPS_CIRCLE = 100;
+const N_STEPS_DONUT = 100;
 
 function drawDonut(rotation){
-    const screen = new Screen(width, height);
     const step_circle = 2*Math.PI/N_STEPS_CIRCLE;
     const step_donut = 2*Math.PI/N_STEPS_DONUT;
+    const triangles = [];
+    const points = [];
+    const lines = [];
+    
     for (let i = 0; i < 2*Math.PI; i+=step_circle){
         for (j = 0; j < 2*Math.PI; j+=step_donut){
             let p1 = new Vector(
@@ -248,29 +287,74 @@ function drawDonut(rotation){
             p2 = p2.rotate(rotation);
             p3 = p3.rotate(rotation);
             p4 = p4.rotate(rotation);
-            
-            screen.point(p1, [150, 0, 0]);
-            screen.point(p2, [150, 0, 0]);
-            screen.point(p3, [150, 0, 0]);
 
             t1 = new Triangle(p1, p2, p3);
             t2 = new Triangle(p3, p2, p4);
             
-            screen.triangle(t1, [255, 255, 255]);
-            // screen.triangle(t2, [255, 255, 255]);
-            // break
+            points.push(p1);
+            lines.push([p1, p2]);
+            lines.push([p1, p3]);
+            triangles.push(t1);
+            triangles.push(t2);
         }
-        // break
     }
+
+    const screen = new Screen(width, height);
+
+    // Sort triangles by z position of first point
+    
+    triangles.sort((a,b) => {
+        return  b.p1.z- a.p1.z ;
+    });
+    triangles.forEach(triangle => {
+        screen.triangle(triangle);
+    });
+    // Draw lines
+    lines.forEach(line => {
+        // screen.line(line[0], line[1], [0, 0, 0], [0, 0, 0]);
+    });
+    // Draw points
+    points.forEach(point => {
+        // screen.point(point, [150, 0, 0]);
+    });
     screen.draw();
 }
+
+
+function drawTriange(rotation){
+    const size = 50;
+    const screen = new Screen(size, size);
+    const triangle_height = size / 3;
+    p1 = new Vector(triangle_height, 0, 0);
+    p2 = new Vector(-triangle_height, 0, 0);
+    p3 = new Vector(0, -triangle_height, 0);
+
+    p1 = p1.rotate(rotation);
+    p2 = p2.rotate(rotation);
+    p3 = p3.rotate(rotation);
+
+    t = new Triangle(p2, p1, p3);
+
+    screen.triangle(t);
+    
+    screen.line(p1, p2, [255, 0, 0], [255, 0, 0]);
+    screen.line(p2, p3, [255, 0, 0], [255, 0, 0]);
+    screen.line(p3, p1, [255, 0, 0], [255, 0, 0]);
+
+
+    screen.point(p1, [255, 0, 0]);
+    screen.point(p2, [255, 0, 0]);
+    screen.point(p3, [255, 0, 0]);
+    screen.draw(10);
+}
+
 
 
 // drawDonut(1,1,0);
 
 const rotation = {
     x: 0,
-    y: -Math.PI/2,
+    y: 0,//-Math.PI/4,
     z: 0,
 }
 // Animation
@@ -278,11 +362,11 @@ const rotation = {
 function loop(timestamp) {
     seconds = timestamp/1000;
     drawDonut(rotation);
-    rotation.x += 0.005;
+    // drawTriange(rotation);
     rotation.x = Math.PI*seconds * 0.1;
     rotation.y = Math.PI*seconds * 0.2;
 
-    requestAnimationFrame(loop);
+    // requestAnimationFrame(loop);
 }
 
 window.requestAnimationFrame(loop);
