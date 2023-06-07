@@ -8,10 +8,18 @@
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
+// Screeen size
+const screenWidth = window.innerWidth;
+const screenHeight = window.innerHeight;
 
-const width = 900; const height = 900;
+// Set canvas width and height as screenWidth
+canvas.width = screenWidth-20;
+canvas.height = screenWidth-20;
 
-class Image{
+
+const width = 800; const height = 800;
+
+class Screen{
 
     constructor(width, height){
         this.width = width;
@@ -23,6 +31,10 @@ class Image{
             // this.data[i + 2] = 0; // B value
             this.data[i + 3] = 255; // A value
         }
+        this.light = new Vector(0.5,0.5,-1);
+        this.camera = {
+            direction: new Vector(0,0,1),
+        }
     }
 
     set(x,y, value){
@@ -33,35 +45,75 @@ class Image{
         this.data[(y*this.width + x)*4 + 3] = 255;
     }
 
-    drawPoint(point, value){
+    point(point, value){
         this.set(point.x, point.y, value);
+    }
+
+
+    line(point1, point2, value1, value2) {
+        // Line rasterization
+        const dx = point2.x - point1.x;
+        const dy = point2.y - point1.y;
+        const steps = Math.max(Math.abs(dx), Math.abs(dy));
+        const xinc = dx / steps;
+        const yinc = dy / steps;
+        let x = point1.x;
+        let y = point1.y;
+        let value = value1;
+        for (let i = 0; i < steps; i++) {
+            this.set(Math.floor(x), Math.floor(y), value);
+            x += xinc;
+            y += yinc;
+            value = value.map((v, i) => v + (value2[i] - value1[i]) / steps);
+        }
+    }
+
+
+    triangle(triangle, value){
+        // Triangle rasterization
+        const normal = triangle.normal();
+        // Check if triangle is backfacing
+        if ( normal.dot(this.camera.direction) > 0) return;
+        const intensity = Math.max(0,normal.dot(this.light))
+
+
+        // // Draw lines
+        this.line(triangle.p1, triangle.p2, [intensity, intensity, intensity], [intensity, intensity, intensity]);
+        this.line(triangle.p2, triangle.p3, [intensity, intensity, intensity], [intensity, intensity, intensity]);
+        this.line(triangle.p3, triangle.p1, [intensity, intensity, intensity], [intensity, intensity, intensity]);
+
+        // console.log(line1, line2, line3);
+        // Scan lines
+        // const p1 = triangle.p1;
+        // const p2 = triangle.p2;
+        // const p3 = triangle.p3;
+
+        // const minx = Math.floor(Math.min(p1.x, p2.x, p3.x));
+        // const miny = Math.floor(Math.min(p1.y, p2.y, p3.y));
+
+        // const maxx = Math.ceil(Math.max(p1.x, p2.x, p3.x));
+        // const maxy = Math.ceil(Math.max(p1.y, p2.y, p3.y));
+
+        // for ( let x = minx; x < maxx; x++){
+        //     for (let y = miny; y < maxy; y++){
+        //         const b = triangle.barycentric(x,y)
+        //         if (b.x > 0 && b.y > 0 && b.z > 0){
+        //             this.set(x,y, [255,255,255]);
+        //         }
+        //     }
+        // }
+
+    }
+
+
+    draw(){
+        const imageData = new ImageData(this.data, this.width, this.height);
+        ctx.putImageData(imageData, 0,0)
     }
 
 }
 
-const image = new Image(width, height);
-console.log(image.data);
-
-
-// Screeen size
-const screenWidth = window.innerWidth;
-const screenHeight = window.innerHeight;
-
-// Set canvas width and height as screenWidth
-canvas.width = screenWidth-20;
-canvas.height = screenWidth-20;
-
-
-
-
-let imageData = new ImageData(image.data, width, height);
-imageData.data = image.data;
-imageData.colorSpace = 'rgb';
-
-console.log(imageData)
-
-
-class Point{
+class Vector{
     constructor(x,y,z){
         this.x = x;
         this.y = y;
@@ -73,8 +125,7 @@ class Point{
         const sina = Math.sin(rad);
         const y = this.y * cosa - this.z * sina;
         const z = this.y * sina + this.z * cosa;
-        this.y = y;
-        this.z = z;
+        return new Vector(this.x, y, z);
     }
 
     rotateY(rad){
@@ -82,8 +133,7 @@ class Point{
         const sina = Math.sin(rad);
         const x = this.x * cosa - this.z * sina;
         const z = this.x * sina + this.z * cosa;
-        this.z = z;
-        this.x = x;
+        return new Vector(x, this.y, z);
     }
 
     rotateZ(rad){
@@ -91,74 +141,149 @@ class Point{
         const sina = Math.sin(rad);
         const x = this.x * cosa - this.y * sina;
         const y = this.x * sina + this.y * cosa;
-        // return new Point(x, y, this.z);
-        this.x = x;
-        this.y = y;
+        return new Vector(x, y, this.z);
+    }
+
+    rotate(rads) {
+        let p = this.rotateX(rads.x);
+        p = p.rotateY(rads.y);
+        p = p.rotateZ(rads.z);
+        return p;
     }
 
     dot(point){
         return this.x * point.x + this.y * point.y + this.z * point.z;
     }
+
+    copy() {
+        return new Vector(this.x, this.y, this.z);
+    }
+
+    // Substracts a vector from this vector
+    sub(point){
+        return new Vector(this.x - point.x, this.y - point.y, this.z - point.z);
+    }
+    // Adds a vector to this vector
+    add(point){
+        return new Vector(this.x + point.x, this.y + point.y, this.z + point.z);
+    }
+
+    cross(point) {
+        return new Vector(
+            this.y * point.z - this.z * point.y,
+            this.z * point.x - this.x * point.z,
+            this.x * point.y - this.y * point.x,
+        );
+    }
+
 }
 
-function draw(image){
-    const imageData = new ImageData(image.data, width, height);
-    ctx.putImageData(imageData, 0,0)
+Vector.prototype['-'] = function(point){return this.sub(point);}
+Vector.prototype['+'] = function(point){return this.add(point);}
+
+
+class Triangle{
+
+    constructor(p1, p2, p3){
+        this.p1 = p1;
+        this.p2 = p2;
+        this.p3 = p3;
+    }
+
+    normal(){
+        const v1 = this.p2.sub(this.p1);
+        const v2 = this.p3.sub(this.p1);
+        return v1.cross(v2);
+    }
+
+    barycentric(x,y) {
+        const v0 = this.p2.sub(this.p1);
+        const v1 = this.p3.sub(this.p1);
+        const v2 = new Vector(this.p1.x - x, this.p1.y - y, 0);
+        const d00 = v0.dot(v0);
+        const d01 = v0.dot(v1);
+        const d11 = v1.dot(v1);
+
+        const d20 = v2.dot(v0);
+        const d21 = v2.dot(v1);
+        const denom = d00 * d11 - d01 * d01;
+        const v = (d11 * d20 - d01 * d21) / denom;
+        const w = (d00 * d21 - d01 * d20) / denom;
+        const u = 1.0 - v - w;
+        return new Vector(u,v,w);
+    }
+
 }
+
 
 const CIRCLE_RADIUS = 40*2;
 const HOLE_RADIUS = 30*3;
-const STEP = 0.01 * Math.PI;
-const FILL_RATIO = 100 * Math.PI;
-const CAMERA = new Point(0,1,0);
+const N_STEPS_CIRCLE = 50;
+const N_STEPS_DONUT = 50;
 
-function drawDonut(rotationX, rotationZ, fluctNumber){
-    const image = new Image(width, height);
-    let circle_radius = CIRCLE_RADIUS //+ fluctNumber*20;
-    let hole_radius = HOLE_RADIUS //+ fluctNumber*20;
-    const multiplier = 1//(1 + fluctNumber*0.5) + 0.1;
-    let fill_ratio = FILL_RATIO*10*(1/multiplier)
-    let step = STEP * multiplier;
-    let i = 0;
-    for (let i = 0; i < 2*Math.PI; i+=step/circle_radius){
-        const point = new Point(
-            Math.cos(i*fill_ratio)*circle_radius + (hole_radius + circle_radius),
-            Math.sin(i*fill_ratio)*circle_radius,
-            0,
-        )
-        point.rotateY(i);
-        point.rotateX(rotationX);
-        point.rotateZ(rotationZ);
-        point.prev 
+function drawDonut(rotation){
+    const screen = new Screen(width, height);
+    const step_circle = 2*Math.PI/N_STEPS_CIRCLE;
+    const step_donut = 2*Math.PI/N_STEPS_DONUT;
+    for (let i = 0; i < 2*Math.PI; i+=step_circle){
+        for (j = 0; j < 2*Math.PI; j+=step_donut){
+            let p1 = new Vector(
+                Math.cos(i)*CIRCLE_RADIUS + ( HOLE_RADIUS + CIRCLE_RADIUS),
+                Math.sin(i)*CIRCLE_RADIUS,
+                0,
+            )
+            let p2 = new Vector(
+                Math.cos(i+step_circle)*CIRCLE_RADIUS + ( HOLE_RADIUS + CIRCLE_RADIUS),
+                Math.sin(i+step_circle)*CIRCLE_RADIUS,
+                0,
+            )
+            let p3 = p1.copy();
+            let p4 = p2.copy();
+            p1 = p1.rotateY(j);
+            p2 = p2.rotateY(j);
+            p3 = p3.rotateY(j+step_donut);
+            p4 = p4.rotateY(j+step_donut);
 
-        // const normal = new Point(
-        //     Math.sin(i*fill_ratio),
-        //     Math.cos(i*fill_ratio),
-        //     0,
-        // )
-        // normal.rotateY(i);
-        // normal.rotateX(rotationZ);
-        // normal.rotateZ(rotationX);
-        // if (CAMERA.dot(normal) > 0){
-        image.drawPoint(point, [255, 255, 255]);
-        // }
-        // image.drawPoint(point, [255, 255, 255]);
+            p1 = p1.rotate(rotation);
+            p2 = p2.rotate(rotation);
+            p3 = p3.rotate(rotation);
+            p4 = p4.rotate(rotation);
+            
+            screen.point(p1, [150, 0, 0]);
+            screen.point(p2, [150, 0, 0]);
+            screen.point(p3, [150, 0, 0]);
+
+            t1 = new Triangle(p1, p2, p3);
+            t2 = new Triangle(p3, p2, p4);
+            
+            screen.triangle(t1, [255, 255, 255]);
+            // screen.triangle(t2, [255, 255, 255]);
+            // break
+        }
+        // break
     }
-    draw(image);
+    screen.draw();
 }
 
 
-let rotationX = 0;
-let rotationZ = 0;
-let fluctNumber = 0;
+// drawDonut(1,1,0);
+
+const rotation = {
+    x: 0,
+    y: -Math.PI/2,
+    z: 0,
+}
 // Animation
-function loop() {
-    drawDonut(rotationX, rotationZ, Math.sin(fluctNumber));
-    rotationX += 0.005;
-    rotationZ += 0.01;
-    fluctNumber += 0.005;
+
+function loop(timestamp) {
+    seconds = timestamp/1000;
+    drawDonut(rotation);
+    rotation.x += 0.005;
+    rotation.x = Math.PI*seconds * 0.1;
+    rotation.y = Math.PI*seconds * 0.2;
+
     requestAnimationFrame(loop);
 }
 
-loop();
+window.requestAnimationFrame(loop);
 </script>
