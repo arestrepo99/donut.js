@@ -3,6 +3,8 @@
 
 </canvas>
 
+<!-- <script src="gpu-browser.min.js"></script> -->
+
 <script>
 
 const canvas = document.getElementById('canvas');
@@ -61,7 +63,9 @@ class Screen{
     }
 
 
-    line(point1, point2, value1, value2) {
+    line(line, value1, value2) {
+        const point1 = line.p1;
+        const point2 = line.p2;
         // Line rasterization
         const dx = point2.x - point1.x;
         const dy = point2.y - point1.y;
@@ -80,18 +84,17 @@ class Screen{
     }
 
 
-    triangle(triangle, color){
-        // const {c1,c2,c3} = color;
-
+    triangle(triangle){
         // Triangle rasterization
-        const normal = triangle.normal();
+        const {n1, n2, n3} = triangle.getNormalAtVertices();
         // Check if triangle is backfacing
-        if ( normal.dot(this.camera.direction) > 0) return;
-        // console.log(normal)
-        const intensity = Math.max(0,normal.dot(this.light)) * 255;
-        // console.log(intensity);
+        if ( triangle.normal().dot(this.camera.direction) > 0) return;
 
-        // // Draw lines
+        const intensity = {
+            i1: Math.max(0, n1.dot(this.light)),
+            i2: Math.max(0, n2.dot(this.light)),
+            i3: Math.max(0, n3.dot(this.light)),
+        }
         const p1 = triangle.p1;
         const p2 = triangle.p2;
         const p3 = triangle.p3;
@@ -104,35 +107,60 @@ class Screen{
 
         for ( let x = minx; x < maxx; x++){
             for (let y = miny; y < maxy; y++){
-                const {w, v, u} = triangle.barycentric(x,y);
+                const {u, w, v} = triangle.barycentric(x,y);
                 if ( w >= -0.01 && v >= -0.01 && u >= -0.01 && w <= 1.01 && v <= 1.01 && u <= 1.01){
-                    this.set(x,y, [intensity, intensity, intensity]);
+                    const mixed_intensity = (intensity.i1 * u + intensity.i2 * w + intensity.i3 * v) * 255;
+                    this.set(x,y, [mixed_intensity, mixed_intensity, mixed_intensity]);
                 }
             }
         }
-
     }
 
-
-    draw(upsample = 1){
-        let array = this.data;
-        if (upsample > 1){
-            // Upsample
-            array = new Uint8ClampedArray(this.width * this.height * 4 * upsample * upsample);
-            for (let i = 0; i < this.width; i++){
-                for (let j = 0; j < this.height; j++){
-                    for (let x = 0; x < upsample; x++){
-                        for (let y = 0; y < upsample; y++){
-                            array[((j*upsample+y)*this.width*upsample + (i*upsample+x))*4 + 3] = 255;
-                            array[((j*upsample+y)*this.width*upsample + (i*upsample+x))*4 + 0] = this.data[(j*this.width + i)*4 + 0];
-                            array[((j*upsample+y)*this.width*upsample + (i*upsample+x))*4 + 1] = this.data[(j*this.width + i)*4 + 1];
-                            array[((j*upsample+y)*this.width*upsample + (i*upsample+x))*4 + 2] = this.data[(j*this.width + i)*4 + 2];
-                        }
+    upsample(number) {
+        const array = this.data;
+        // Upsample
+        array = new Uint8ClampedArray(this.width * this.height * 4 * number * number);
+        for (let i = 0; i < this.width; i++){
+            for (let j = 0; j < this.height; j++){
+                for (let x = 0; x < number; x++){
+                    for (let y = 0; y < number; y++){
+                        array[((j*number+y)*this.width*number + (i*number+x))*4 + 3] = 255;
+                        array[((j*number+y)*this.width*number + (i*number+x))*4 + 0] = this.data[(j*this.width + i)*4 + 0];
+                        array[((j*number+y)*this.width*number + (i*number+x))*4 + 1] = this.data[(j*this.width + i)*4 + 1];
+                        array[((j*number+y)*this.width*number + (i*number+x))*4 + 2] = this.data[(j*this.width + i)*4 + 2];
                     }
                 }
             }
         }
-        
+        return array;
+    }
+
+
+    blur(kernelSize) {
+        const gpu = new GPU();
+        for (let i = 0; i < this.width; i++){
+            for (let j = 0; j < this.height; j++){
+                let r = 0, g = 0, b = 0;
+                for (let x = 0; x < kernelSize; x++){
+                    for (let y = 0; y < kernelSize; y++){
+                        const k = kernel[x*kernelSize + y];
+                        r += this.data[((j+y)*this.width + (i+x))*4 + 0] * k;
+                        g += this.data[((j+y)*this.width + (i+x))*4 + 1] * k;
+                        b += this.data[((j+y)*this.width + (i+x))*4 + 2] * k;
+                    }
+                }
+                array[(j*this.width + i)*4 + 0] = r;
+                array[(j*this.width + i)*4 + 1] = g;
+                array[(j*this.width + i)*4 + 2] = b;
+            }
+        }
+        return array;
+    }
+
+    draw(upsample = 1){
+        let array = this.data;
+        if (upsample > 1) array = this.upsample(upsample);
+        // array = this.blur(4);
         const imageData = new ImageData(array, this.width*upsample, this.height*upsample);
         ctx.putImageData(imageData, 0,0)
     }
@@ -207,18 +235,50 @@ class Vector{
         );
     }
 
+    getZ(){
+        return this.z;
+    }
+
 }
 
-Vector.prototype['-'] = function(point){return this.sub(point);}
-Vector.prototype['+'] = function(point){return this.add(point);}
+
+class Line {
+
+    constructor (p1, p2){
+        this.p1 = p1;
+        this.p2 = p2;
+    }
+
+    rotate(rotation){
+        return new Line(this.p1.rotate(rotation), this.p2.rotate(rotation));
+    }
+
+    getZ(){
+        return (this.p1.z + this.p2.z)/2 - 20;
+    }
+
+}
 
 
 class Triangle{
 
-    constructor(p1, p2, p3){
+    constructor(p1, p2, p3, texture){
         this.p1 = p1;
         this.p2 = p2;
         this.p3 = p3;
+        this.texture = texture;
+    }
+
+
+
+    setNormalAtVertices(n1, n2, n3){
+        this.n1 = n1; this.n2 = n2; this.n3 = n3;
+    }
+
+    getNormalAtVertices(){
+        if (this.n1 && this.n2 && this.n3) return {n1: this.n1, n2: this.n2, n3: this.n3};
+        const n = this.normal();
+        return {n1: n, n2: n, n3: n};
     }
 
     normal(){
@@ -226,7 +286,6 @@ class Triangle{
         const v2 = this.p3.sub(this.p1);
         return v1.cross(v2).normalize();
     }
-
 
     // Get the w1 and w2 values for a point
     barycentric(x,y) {
@@ -246,7 +305,33 @@ class Triangle{
         const w = (d11 * d20 - d01 * d21) / denom;
         const v = (d00 * d21 - d01 * d20) / denom;
         const u = 1 - w - v;
-        return {w, v, u};
+        return {u, w, v}; 
+        // u corresponds to p1, v to p2 and w to p3
+    }
+
+    texture(x,y, width, height){
+        if (!texture) return [255, 255, 255, 255];
+        barycentric = this.barycentric(x,y);
+        return texture.getPixel(x/width, y/height);
+    }
+
+    rotate(rotation){
+        const p1 = this.p1.rotate(rotation);
+        const p2 = this.p2.rotate(rotation);
+        const p3 = this.p3.rotate(rotation);
+        const triangle = new Triangle(p1, p2, p3);
+        // Rotate normals
+        if (this.n1 && this.n2 && this.n3) {
+            const n1 = this.n1.rotate(rotation);
+            const n2 = this.n2.rotate(rotation);
+            const n3 = this.n3.rotate(rotation);
+            triangle.setNormalAtVertices(n1, n2, n3);
+        }
+        return triangle;
+    }
+
+    getZ(){
+        return (this.p1.z + this.p2.z + this.p3.z)/3;
     }
 
 }
@@ -254,69 +339,101 @@ class Triangle{
 
 const CIRCLE_RADIUS = 80;
 const HOLE_RADIUS = 90;
-const N_STEPS_CIRCLE = 100;
-const N_STEPS_DONUT = 100;
+const N_STEPS_CIRCLE = 50;
+const N_STEPS_DONUT = 50;
 
-function drawDonut(rotation){
+
+class Texture{
+
+    constructor(array, width, height){
+        this.arrray = array;
+    }
+
+    getPixel(verticalRatio, horizontalRatio){
+        const x = Math.floor(horizontalRatio * this.width);
+        const y = Math.floor(verticalRatio * this.height);
+        const index = (x + y * this.width) * 4;
+        return this.array[index, index+1, index+2, index+3]
+    }
+}
+
+
+class Mesh{
+
+    constructor(triangles, lines, points, texture){
+        this.triangles = triangles;
+        this.lines = lines;
+        this.points = points;
+        this.texture = texture;
+    }
+    
+}
+
+
+// Donut texture
+
+
+
+function DonutMesh(){
     const step_circle = 2*Math.PI/N_STEPS_CIRCLE;
     const step_donut = 2*Math.PI/N_STEPS_DONUT;
     const triangles = [];
     const points = [];
     const lines = [];
-    
+    const c_r = CIRCLE_RADIUS;
+    const h_r = HOLE_RADIUS;
+    const screen = new Screen(width, height);
     for (let i = 0; i < 2*Math.PI; i+=step_circle){
         for (j = 0; j < 2*Math.PI; j+=step_donut){
-            let p1 = new Vector(
-                Math.cos(i)*CIRCLE_RADIUS + ( HOLE_RADIUS + CIRCLE_RADIUS),
-                Math.sin(i)*CIRCLE_RADIUS,
-                0,
-            )
-            let p2 = new Vector(
-                Math.cos(i+step_circle)*CIRCLE_RADIUS + ( HOLE_RADIUS + CIRCLE_RADIUS),
-                Math.sin(i+step_circle)*CIRCLE_RADIUS,
-                0,
-            )
-            let p3 = p1.copy();
-            let p4 = p2.copy();
-            p1 = p1.rotateY(j);
-            p2 = p2.rotateY(j);
-            p3 = p3.rotateY(j+step_donut);
-            p4 = p4.rotateY(j+step_donut);
-
-            p1 = p1.rotate(rotation);
-            p2 = p2.rotate(rotation);
-            p3 = p3.rotate(rotation);
-            p4 = p4.rotate(rotation);
-
-            t1 = new Triangle(p1, p2, p3);
-            t2 = new Triangle(p3, p2, p4);
-            
+            let p1 = new Vector(Math.cos(i)*c_r + ( h_r + c_r), Math.sin(i)*c_r, 0)
+            let n1 = new Vector(Math.cos(i), Math.sin(i), 0).normalize();
+            let p2 = new Vector(Math.cos(i+step_circle)*c_r + ( h_r + c_r), Math.sin(i+step_circle)*c_r, 0)
+            let n2 = new Vector(Math.cos(i+step_circle), Math.sin(i+step_circle), 0).normalize();
+            let p3 = p1.copy(); let p4 = p2.copy();
+            let n3 = n1.copy(); let n4 = n2.copy();
+            p1 = p1.rotateY(j); p2 = p2.rotateY(j); p3 = p3.rotateY(j+step_donut); p4 = p4.rotateY(j+step_donut);
+            n1 = n1.rotateY(j); n2 = n2.rotateY(j); n3 = n3.rotateY(j+step_donut); n4 = n4.rotateY(j+step_donut);
+            t1 = new Triangle(p1, p2, p3); t2 = new Triangle(p3, p2, p4);
+            t1.setNormalAtVertices(n1, n2, n3); t2.setNormalAtVertices(n3, n2, n4);
             points.push(p1);
-            lines.push([p1, p2]);
-            lines.push([p1, p3]);
+            lines.push(new Line(p1, p2));
+            lines.push(new Line(p2, p3));
+            lines.push(new Line(p3, p1));
             triangles.push(t1);
             triangles.push(t2);
         }
     }
+    return {triangles, points, lines};
+}
 
+donut = DonutMesh();
+
+function drawDonut(rotation){
     const screen = new Screen(width, height);
 
-    // Sort triangles by z position of first point
+    let {triangles, points, lines} = donut;
     
-    triangles.sort((a,b) => {
-        return  b.p1.z- a.p1.z ;
+    triangles = triangles.map(triangle => triangle.rotate(rotation));
+    points = points.map(point => point.rotate(rotation));
+    lines = lines.map(line => line.rotate(rotation));
+
+    const objects = [...triangles, ...lines];
+
+    // Sort objects by z position of first point
+    objects.sort((a,b) => {
+        return  b.getZ() - a.getZ();
     });
-    triangles.forEach(triangle => {
-        screen.triangle(triangle);
+
+    objects.forEach(object => {
+        if (object instanceof Triangle){
+            screen.triangle(object);
+        } else if (object instanceof Line){
+            // screen.line(object, [0, 0, 0], [0, 0, 0]);
+        }
     });
-    // Draw lines
-    lines.forEach(line => {
-        // screen.line(line[0], line[1], [0, 0, 0], [0, 0, 0]);
-    });
-    // Draw points
-    points.forEach(point => {
-        // screen.point(point, [150, 0, 0]);
-    });
+    // points.forEach(point => screen.point(point, [255, 0, 0]));
+
+
     screen.draw();
 }
 
@@ -348,25 +465,35 @@ function drawTriange(rotation){
     screen.draw(10);
 }
 
+function frequencyArt(rotation, timestamp){
+    const screen = new Screen(width, height);
+    
+    // Frequency of distance from center
+    frequency = 0.1;
+    
+}
+
 
 
 // drawDonut(1,1,0);
 
 const rotation = {
     x: 0,
-    y: 0,//-Math.PI/4,
+    y: -Math.PI/2,
     z: 0,
 }
 // Animation
-
+let start_time = window.performance.now()/1000;
 function loop(timestamp) {
     seconds = timestamp/1000;
+    fps = 1/(seconds - start_time);
+    start_time = seconds;
     drawDonut(rotation);
     // drawTriange(rotation);
-    rotation.x = Math.PI*seconds * 0.1;
-    rotation.y = Math.PI*seconds * 0.2;
+    rotation.x = Math.PI*seconds * 0.05;
+    rotation.y = Math.PI*seconds * 0.1;
 
-    // requestAnimationFrame(loop);
+    requestAnimationFrame(loop);
 }
 
 window.requestAnimationFrame(loop);
