@@ -9,7 +9,7 @@
 <!-- Checkbox -->
 <br>
 <!-- Set line spacing to hight -->
-<div style="width:500 px; height: 50px; background-color: #f1f1f1;">
+<div style="width:800px; height: 80px; background-color: #f1f1f1;">
     <input type="checkbox" id="myCheck">
     <label for="myCheck">Lines</label>
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
@@ -22,7 +22,9 @@
     <!-- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -->
     <input type="checkbox" id="myCheck6" checked>
     <label for="myCheck6">Texture</label>
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <!-- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -->
+    <br>
+    <br>
     <input type="checkbox" id="myCheck7" checked>
     <label for="myCheck7">Lighting</label>
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
@@ -92,8 +94,8 @@ const lightRotation = {
 function mouseRotate(event) {
     event.preventDefault();
     // Movement in x and y
-    rotation.x += event.movementX * 0.01;
-    rotation.y += event.movementY * 0.01;
+    rotation.x += event.movementY * 0.01;
+    rotation.z +=  event.movementX * 0.01; 
 }
 // On mouse down, call mouseRotate
 canvas.addEventListener('mousedown', (event) => {
@@ -115,16 +117,17 @@ function loop(timestamp) {
     fps = 1/dt;
     start_time = seconds;
     const screen = new Screen(width, height);
-    console.log(screen.light);
-    drawDonut(rotation, screen);
+    
     if (settings.rotate) {
         rotation.x += -Math.PI*dt * 0.05;
         rotation.y += -Math.PI*dt * 0.1;
     }
-    // if (settings.rotateLight){
-    //     rotation.y += -Math.PI*dt * 0.03;
-    // }
-
+    if (settings.rotateLight){
+        lightRotation.x += -Math.PI*dt * 0.2;
+        lightRotation.y += -Math.PI*dt * 0.1;
+    }
+    screen.light = screen.light.rotate(lightRotation);
+    drawDonut(rotation, screen);
     // drawTriange(rotation);
 
     requestAnimationFrame(loop);

@@ -104,7 +104,7 @@ textureImageData.data.set(texture_array);
 
 const CIRCLE_RADIUS = 80;
 const HOLE_RADIUS = 90;
-const N_STEPS_CIRCLE = 20;
+const N_STEPS_CIRCLE = 30;
 const N_STEPS_DONUT = 40;
 // CREATE DONUT MESH
 function DonutMesh(){
