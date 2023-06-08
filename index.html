@@ -88,8 +88,10 @@ const lightRotation = {
     z: 0,
 }
 
-// rotation.x = Math.PI/2;
-// rotation.y = Math.PI/4;
+rotation.x = Math.PI/4;
+rotation.y = Math.PI/2;
+// rotation.z = -Math.PI/2;
+
 
 function mouseRotate(event) {
     event.preventDefault();
@@ -105,6 +107,78 @@ canvas.addEventListener('mouseup', () => {
     canvas.removeEventListener('mousemove', mouseRotate);
 });
 
+const CIRCLE_RADIUS = 80;
+const HOLE_RADIUS = 90;
+function frequencyArt(rotaton, screen,timestamp){
+    const lines = [];
+    const c_r = CIRCLE_RADIUS;
+    const h_r = HOLE_RADIUS;
+    const step = 0.01;
+    
+    const c1_c2_ratio = timestamp;
+
+    // let p = new Vector(Math.cos(timestamp)*c_r + ( h_r + c_r), Math.sin(timestamp)*c_r, 0)
+    let i = 0;
+    let prev = new Vector(Math.cos(i)*c_r + ( h_r + c_r), Math.sin(i)*c_r, 0)
+    for (i = step; i < 2*Math.PI * c1_c2_ratio; i+=step){
+        let j = i / c1_c2_ratio;
+
+        let p2 = prev.copy();
+        let p = new Vector(Math.cos(i)*c_r + ( h_r + c_r), Math.sin(i)*c_r, 0)
+        prev = p.copy();
+
+        // Offset needed for the last line to connect to the first
+        // c1_c2_ratio = should be a whole number
+        const offset = 
+
+        p = p.rotateY(j);
+        p2 = p2.rotateY(j);
+        let line = new Line(p, p2);
+        line = line.rotate(rotation);
+        screen.line(line, [255, 255, 255, 255], [255, 255, 255, 255]);
+    }
+    screen.draw();
+}
+// Rotatio
+
+
+// Fourier 
+function Wid(rotaton, screen,timestamp){
+    const lines = [];
+    const step = 0.01;
+
+    let i = 0;
+    // Start Vector
+
+    if (timestamp > Math.pi/10 ){
+        timestamp = Math.PI;
+    }
+
+    const start_vector = new Vector(0,200,0)
+    let prev = start_vector.copy();
+    for (i = step; i < timestamp*10; i+=step){
+
+
+        let p = start_vector.copy().rotateZ(i);
+        p = p.rotateY(0.1*i);
+        p = p.rotateX(i);
+    
+
+        // Squish the x+y axis
+        const p_squish = p.copy();
+        p_squish.z = 0.1*p_squish.z;
+        const prev_squish = prev.copy();
+        prev_squish.z = 0.1*prev_squish.z;
+        let line = new Line(p_squish, prev_squish);
+        line = line.rotate(rotation);
+        screen.line(line, [255, 255, 255, 255], [255, 255, 255, 255]);
+        prev = p.copy();
+    }
+    screen.draw();
+}
+
+
+settings.rotate = true;
 
 // Animation
 let start_time = window.performance.now()/1000;
@@ -126,9 +200,10 @@ function loop(timestamp) {
         lightRotation.x += -Math.PI*dt * 0.2;
         lightRotation.y += -Math.PI*dt * 0.1;
     }
-    screen.light = screen.light.rotate(lightRotation);
-    drawDonut(rotation, screen);
+    // screen.light = screen.light.rotate(lightRotation);
+    // drawDonut(rotation, screen);
     // drawTriange(rotation);
+    Wid(rotation, screen, seconds);
 
     requestAnimationFrame(loop);
 }
