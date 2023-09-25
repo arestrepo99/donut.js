@@ -1,4 +1,3 @@
-
 import Vector from './vector.js';
 import {settings} from "./input.js";
 // import Line from './line.js';
@@ -82,19 +81,19 @@ export default class Screen{
         // Check if triangle is backfacing
         if ( triangle.normal().dot(this.camera.direction) > 0) return;
 
-        let intensity = {
-            i1: Math.max(0, n1.dot(this.light)),
-            i2: Math.max(0, n2.dot(this.light)),
-            i3: Math.max(0, n3.dot(this.light)),
-        }
+        // let intensity = {
+        //     i1: Math.max(0, n1.dot(this.light)),
+        //     i2: Math.max(0, n2.dot(this.light)),
+        //     i3: Math.max(0, n3.dot(this.light)),
+        // }
 
-        // No shading
-        if (!settings.betterShading) {
-            const int = triangle.normal().dot(this.light);
-            intensity.i1 = int
-            intensity.i2 = int
-            intensity.i3 = int
-        }
+        // // No shading
+        // if (!settings.betterShading) {
+        //     const int = triangle.normal().dot(this.light);
+        //     intensity.i1 = int
+        //     intensity.i2 = int
+        //     intensity.i3 = int
+        // }
         // if (noShading) intensity.i1 = intensity.i2 = intensity.i3 = 1;
         if (!settings.renderTriangles) return
 
@@ -113,11 +112,11 @@ export default class Screen{
                 const {u, w, v} = triangle.barycentric(x,y);
                 if ( w >= -0.01 && v >= -0.01 && u >= -0.01 && w <= 1.01 && v <= 1.01 && u <= 1.01){
                     let color = triangle.getColorAtBarycentric(u,w,v);
-                    let mixed_intensity = (intensity.i1 * u + intensity.i2 * w + intensity.i3 * v);
-                    if (!settings.lighting) {
-                        mixed_intensity = 1;
-                    }
-                    color = [color[0] * mixed_intensity, color[1] * mixed_intensity, color[2] * mixed_intensity, color[3]];
+                    // let mixed_intensity = (intensity.i1 * u + intensity.i2 * w + intensity.i3 * v);
+                    let shade
+                    if (!settings.lighting) shade = 1;
+                    else shade = triangle.getNormalAtBarycentric(u,w,v).dot(this.light);
+                    color = [color[0] * shade, color[1] * shade, color[2] * shade, color[3]];
                     this.set(x,y, [color[0], color[1], color[2], color[3]]);
                 }
             }

@@ -70,4 +70,8 @@ export default class Vector {
         return this.z;
     }
 
+    scale(scalar){
+        return new Vector(this.x * scalar, this.y * scalar, this.z * scalar);
+    }
+
 }

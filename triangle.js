@@ -14,6 +14,7 @@ export default class Triangle{
         this.p2 = p2;
         this.p3 = p3;
         this.texture = texture;
+        this.rotations = [];
     }
 
 
@@ -71,6 +72,7 @@ export default class Triangle{
     }
 
     rotate(rotation){
+        this.rotations.push(rotation);
         const p1 = this.p1.rotate(rotation);
         const p2 = this.p2.rotate(rotation);
         const p3 = this.p3.rotate(rotation);
@@ -88,6 +90,26 @@ export default class Triangle{
         }
         return triangle;
     }
+
+    getNormalAtBarycentric(u, v, w,){
+        const {n1, n2, n3} = this.getNormalAtVertices();
+        // Mix normals with respect to barycentric coordinates
+        let normal 
+        normal = new Vector(n1.x * u + n2.x * v + n3.x * w, n1.y * u + n2.y * v + n3.y * w, n1.z * u + n2.z * v + n3.z * w);
+        normal = normal.normalize();
+        // Get texture normal
+        const ratioAtTexture = new Vector(this.r1.x * u + this.r2.x * v + this.r3.x * w, this.r1.y * u + this.r2.y * v + this.r3.y * w, 0);
+        const x = Math.floor(ratioAtTexture.x * this.texture.width);
+        const y = Math.floor(ratioAtTexture.y * this.texture.height);
+        let textureNormal = this.texture.getNormal(x, y)
+        // Rotate texture normal to match normal
+        this.rotations.forEach(rotation => {
+            textureNormal = textureNormal.rotate(rotation);
+        });
+        normal =  normal.add(textureNormal.scale(0.02)).normalize();
+        return normal;
+    }
+    
 
     getZ(){
         return (this.p1.z + this.p2.z + this.p3.z)/3;

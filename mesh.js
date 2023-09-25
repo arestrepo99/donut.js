@@ -2,16 +2,30 @@ import Vector from "./vector.js";
 import Line from "./line.js";
 import Triangle from "./triangle.js";
 import {settings} from "./input.js";
-
+import GradientNoiseMap from "./gradient-noise.js"
 
 
 class Texture{
 
-    constructor(width, height, texture){
+    constructor(width, height, texture, normalMap){
         this.width = width;
         this.height = height;
         this.texture = texture;
+        this.normalMap = normalMap;
     }
+
+    addNormalMap(self, gradient, noise){
+        const gradient_noise = gradient + noise;
+        const ratio = gradient_noise / 255;
+        const index = (self.y*self.width + self.x)*4;
+
+        const r = this.texture[index + 0] * ratio;
+        const g = this.texture[index + 1] * ratio;
+        const b = this.texture[index + 2] * ratio;
+        const a = this.texture[index + 3] * ratio;
+        return [r, g, b, a];
+    }
+
 
     getPixel(x,y){
         if (x >= this.width) x = this.width - 1;
@@ -21,10 +35,32 @@ class Texture{
         const i = (x + y*this.width)*4;
         return [this.texture[i + 0], this.texture[i + 1], this.texture[i + 2], this.texture[i + 3]];
     }
+    getNormal(x,y){
+        if (x >= this.width) x = this.width - 1;
+        if (y >= this.height) y = this.height - 1;
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        // const x_1 = Math.floor(x);
+        // const y_1 = Math.floor(y);
+        // const x_p = x-x_1
+        // const y_p = y-y_1
+        // const x_2 = x_1 + 1;
+        // const y_2 = y_1 + 1;
+        // return new Vector(
+        //     this.normalMap[(x_1 + y_1*this.width)*4 + 0] * x_p + this.normalMap[(x_2 + y_1*this.width)*4 + 0] * (1-x_p),
+        //     this.normalMap[(x_1 + y_1*this.width)*4 + 1] * x_p + this.normalMap[(x_2 + y_1*this.width)*4 + 1] * (1-x_p),
+        //     this.normalMap[(x_1 + y_1*this.width)*4 + 2] * x_p + this.normalMap[(x_2 + y_1*this.width)*4 + 2] * (1-x_p),
+        // ).normalize();
+        return new Vector(
+            this.normalMap[(x + y*this.width)*4 + 0],
+            this.normalMap[(x + y*this.width)*4 + 1],
+            this.normalMap[(x + y*this.width)*4 + 2],
+        ).normalize();
+    }
 }
-
-const t_width = 600; const t_height = 1800;
+const t_width = 800; const t_height = 2200;
 let texture_array = new Uint8ClampedArray(t_width * t_height * 4);
+let normal_map = GradientNoiseMap.createNormalMap(t_width, t_height);
 
 const FREQUENCY = Math.PI / t_height * 10;
 const AMPLITUDE = 5;
@@ -40,13 +76,24 @@ for (let i = 0; i< t_width; i++) {
             texture_array[index + 0] = 249; // R value
             texture_array[index + 1] = 103; // G value
             texture_array[index + 2] = 198; // B value
-
+            normal_map[index + 0] = 0; // X
+            normal_map[index + 1] = 1; // Y
+            normal_map[index + 2] = 0; // Z
         } else {
             // brown    
             texture_array[index + 0] = 191; // R value
             texture_array[index + 1] = 154; // G value
             texture_array[index + 2] = 94; // B value
         }
+        // const dist = Math.abs(i - (AMPLITUDE*Math.sin(j*FREQUENCY) + START && i < AMPLITUDE*Math.sin(j*FREQUENCY) + END))
+        // if (dist < 10){
+        //     texture_array[index + 0] = 255; // R value
+        //     texture_array[index + 1] = 0; // G value
+        //     texture_array[index + 2] = 0; // B value
+        //     normal_map[index + 0] = 0; // X
+        //     normal_map[index + 1] = dist/10; // Y
+        //     normal_map[index + 2] = 0; 
+        // }
     }
 }
 
@@ -91,7 +138,7 @@ while (num_added < num_sprinkles){
 }
 
 
-const texture = new Texture(t_width, t_height, texture_array);
+const texture = new Texture(t_width, t_height, texture_array, normal_map);
 const textureCanvas = document.getElementById('texture');
 const textureCtx = textureCanvas.getContext('2d');
 const textureImageData = textureCtx.createImageData(t_width, t_height);

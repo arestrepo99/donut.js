@@ -1,0 +1,97 @@
+<script src="https://cdn.jsdelivr.net/npm/noisejs@2.1.0/index.js"></script>
+
+<canvas id="texture"></canvas>
+
+<script type="module">
+const texture = document.getElementById('texture');
+const textureCtx = texture.getContext('2d');
+
+const width = 800; const height = 800;
+// Plot the gradient of a 2D noise function on a canvas
+// const width = 800; const height = 800;
+texture.width = width;
+texture.height = height;
+
+const noise = new Noise();
+const imageData = textureCtx.createImageData(width, height);
+const data = imageData.data;
+
+function calculateGradient(x, y, noiseFunction, step) {
+  const dx = noiseFunction(x + step, y) - noiseFunction(x - step, y);
+  const dy = noiseFunction(x, y + step) - noiseFunction(x, y - step);
+  
+  return [dx, dy];
+}
+
+function getNormal(x,y, width, height){
+    // Return vector normal to surface where hieght is defined by noise function
+    const noisefunc = (x,y) => noise.simplex2(x,y);
+    const zoom = 0.05;
+    const loc_x = x / width / zoom;
+    const loc_y = y / height / zoom;
+    const step = 1/width;
+    const value = Math.abs(noise.simplex2(loc_x, loc_y));
+    const gradient = calculateGradient(loc_x, loc_y, noisefunc, step);
+    return new Vector(gradient[0], gradient[1], 2*step).normalize();
+}
+
+function createNormalMap(width,height){
+    const normalMap = new Array(width * height * 4);
+    for (let x = 0; x < width; x++) {
+        for (let y = 0; y < height; y++) {
+            const cell = (x + y * width) * 4;
+            const gradient = getNormal(x,y, width, height);
+            normalMap[cell] = gradient.x;
+            normalMap[cell + 1] = gradient.y;
+            normalMap[cell + 2] = gradient.z;
+            normalMap[cell + 3] = 0;
+    
+        }
+    }
+return normalMap;
+}
+
+const normalMap = createNormalMap(width, height);
+
+
+import Vector from '../vector.js';
+function draw(light){
+    for (let x = 0; x < width; x++) {
+        for (let y = 0; y < height; y++) {
+            const cell = (x + y * width) * 4;
+            const gradient = new Vector(
+                normalMap[cell],
+                normalMap[cell + 1],
+                normalMap[cell + 2],
+            )
+            // Dot product of the gradient and the light direction
+            // const light = new Vector(0,1,0);
+            const dot = gradient.dot(light);
+            data[cell] = dot * 255;
+            data[cell + 1] = dot * 255;
+            data[cell + 2] = dot * 255;
+            data[cell + 3] = 255;
+        }
+    }
+    textureCtx.putImageData(imageData, 0, 0);
+}
+
+let light = new Vector(-1,-1,1).normalize();
+let last_time = window.performance.now();
+function loop(timestamp) {
+    let dt = timestamp - last_time;
+    last_time = timestamp;
+    dt /= 1000;
+    // light = light.rotate({x:0.1, y:0.2, z:0});
+    light = light.rotate({
+        x:0.1*dt,
+        y:0.2*dt,
+        z:0.05*dt
+    });
+    // console.log(light)
+    draw(light);
+    requestAnimationFrame(loop);
+}
+draw(light);
+loop(window.performance.now());
+</script>
