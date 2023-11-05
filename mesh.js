@@ -85,16 +85,18 @@ for (let i = 0; i< t_width; i++) {
             texture_array[index + 1] = 154; // G value
             texture_array[index + 2] = 94; // B value
         }
-        // const dist = Math.abs(i - (AMPLITUDE*Math.sin(j*FREQUENCY) + START && i < AMPLITUDE*Math.sin(j*FREQUENCY) + END))
-        // if (dist < 10){
-        //     texture_array[index + 0] = 255; // R value
-        //     texture_array[index + 1] = 0; // G value
-        //     texture_array[index + 2] = 0; // B value
-        //     normal_map[index + 0] = 0; // X
-        //     normal_map[index + 1] = dist/10; // Y
-        //     normal_map[index + 2] = 0; 
+        // Dist to sin wave
+        // const dist1 = Math.abs(i - (AMPLITUDE*Math.sin(j*FREQUENCY) + START));
+        // const dist2 = Math.abs(i - (AMPLITUDE*Math.sin(j*FREQUENCY) + END));
+        // const shade_length = 20
+        // if (dist1<shade_length || dist2<shade_length){
+        //     const ratio = Math.min(dist1, dist2) / shade_length;
+        //     normal_map[index + 0] = -ratio; // X
+        //     // normal_map[index + 1] = -; // Y
+        //     // normal_map[index + 2] = -ratio; // Z
         // }
     }
+
 }
 
 // Add Sprinkles

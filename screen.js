@@ -115,6 +115,7 @@ export default class Screen{
                     // let mixed_intensity = (intensity.i1 * u + intensity.i2 * w + intensity.i3 * v);
                     let shade
                     if (!settings.lighting) shade = 1;
+                    else if (!settings.betterShading) shade = triangle.normal().dot(this.light);
                     else shade = triangle.getNormalAtBarycentric(u,w,v).dot(this.light);
                     color = [color[0] * shade, color[1] * shade, color[2] * shade, color[3]];
                     this.set(x,y, [color[0], color[1], color[2], color[3]]);
